@@ -65,14 +65,10 @@ const Navigation = () => {
               </button>
             ))}
             <button
-              onClick={() =>
-                document
-                  .getElementById("pricing")
-                  ?.scrollIntoView({ behavior: "smooth" })
-              }
+              onClick={() => navigate("/signup")}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5"
             >
-              Get Started
+              Sign Up
             </button>
           </div>
 
@@ -104,14 +100,12 @@ const Navigation = () => {
             ))}
             <button
               onClick={() => {
-                document
-                  .getElementById("pricing")
-                  ?.scrollIntoView({ behavior: "smooth" });
+                navigate("/signup");
                 setIsOpen(false);
               }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors mt-4"
             >
-              Get Started
+              Sign Up
             </button>
           </div>
         </div>
