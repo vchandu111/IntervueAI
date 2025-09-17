@@ -43,8 +43,17 @@ const Login = () => {
 
       if (response.ok) {
         console.log("Login successful:", result);
+        // Store token and user info in localStorage
+        localStorage.setItem("authToken", result.idToken);
+        localStorage.setItem("userEmail", result.email);
+        localStorage.setItem(
+          "userDisplayName",
+          result.displayName || result.email.split("@")[0]
+        );
         // Navigate to dashboard or home
         navigate("/");
+        // Refresh the page to update navbar
+        window.location.reload();
       } else {
         setError(
           result.error?.message ||

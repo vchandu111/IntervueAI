@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Menu, X, ChevronRight } from "lucide-react";
+import { Menu, X, ChevronRight, LogOut, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userDisplayName, setUserDisplayName] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -13,6 +15,20 @@ const Navigation = () => {
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    // Check authentication status on component mount
+    const token = localStorage.getItem("authToken");
+    const displayName = localStorage.getItem("userDisplayName");
+
+    if (token) {
+      setIsAuthenticated(true);
+      setUserDisplayName(displayName || "User");
+    } else {
+      setIsAuthenticated(false);
+      setUserDisplayName("");
+    }
   }, []);
 
   const leftNavItems = [
@@ -30,6 +46,21 @@ const Navigation = () => {
       }
     }
     setIsOpen(false);
+  };
+
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userDisplayName");
+
+    // Update state
+    setIsAuthenticated(false);
+    setUserDisplayName("");
+
+    // Navigate to home and refresh
+    navigate("/");
+    window.location.reload();
   };
 
   return (
@@ -65,14 +96,30 @@ const Navigation = () => {
             </div>
           </div>
 
-          {/* Right Side - Signup Button */}
-          <div className="hidden md:block">
-            <button
-              onClick={() => navigate("/signup")}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5"
-            >
-              Signup
-            </button>
+          {/* Right Side - Auth Section */}
+          <div className="hidden md:flex items-center space-x-4">
+            {isAuthenticated ? (
+              <>
+                <div className="flex items-center space-x-2 text-gray-700">
+                  <User size={20} />
+                  <span className="font-medium">Hi, {userDisplayName}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5"
+                >
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => navigate("/signup")}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5"
+              >
+                Signup
+              </button>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -101,15 +148,35 @@ const Navigation = () => {
                 <ChevronRight size={16} />
               </button>
             ))}
-            <button
-              onClick={() => {
-                navigate("/signup");
-                setIsOpen(false);
-              }}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors mt-4"
-            >
-              Signup
-            </button>
+
+            {isAuthenticated ? (
+              <>
+                <div className="flex items-center space-x-2 px-3 py-3 text-gray-700 border-t border-gray-200 mt-4">
+                  <User size={20} />
+                  <span className="font-medium">Hi, {userDisplayName}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    setIsOpen(false);
+                  }}
+                  className="w-full bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                >
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  navigate("/signup");
+                  setIsOpen(false);
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors mt-4"
+              >
+                Signup
+              </button>
+            )}
           </div>
         </div>
       )}
