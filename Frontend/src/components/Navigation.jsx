@@ -15,14 +15,9 @@ const Navigation = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const navItems = [
+  const leftNavItems = [
     { name: "Home", href: "/", isRoute: true },
-    { name: "Features", href: "#features", isRoute: false },
-    { name: "How It Works", href: "#how-it-works", isRoute: false },
-    { name: "Pricing", href: "#pricing", isRoute: false },
-    { name: "Testimonials", href: "#testimonials", isRoute: false },
-    { name: "FAQ", href: "#faq", isRoute: false },
-    { name: "Contact", href: "#contact", isRoute: false },
+    { name: "Pricing", href: "/pricing", isRoute: true },
   ];
 
   const handleNavClick = (item) => {
@@ -45,30 +40,38 @@ const Navigation = () => {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">AI</span>
-            </div>
-            <span className="text-xl font-bold text-gray-900">IntervueAI</span>
-          </Link>
+          {/* Logo and Left Navigation */}
+          <div className="flex items-center space-x-8">
+            <Link to="/" className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">AI</span>
+              </div>
+              <span className="text-xl font-bold text-gray-900">
+                IntervueAI
+              </span>
+            </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
-            {navItems.map((item) => (
-              <button
-                key={item.name}
-                onClick={() => handleNavClick(item)}
-                className="text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium"
-              >
-                {item.name}
-              </button>
-            ))}
+            {/* Desktop Left Navigation */}
+            <div className="hidden md:flex items-center space-x-6">
+              {leftNavItems.map((item) => (
+                <button
+                  key={item.name}
+                  onClick={() => handleNavClick(item)}
+                  className="text-gray-700 hover:text-blue-600 transition-colors duration-200 font-medium"
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right Side - Signup Button */}
+          <div className="hidden md:block">
             <button
               onClick={() => navigate("/signup")}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-200 hover:shadow-lg transform hover:-translate-y-0.5"
             >
-              Sign Up
+              Signup
             </button>
           </div>
 
@@ -88,7 +91,7 @@ const Navigation = () => {
       {isOpen && (
         <div className="md:hidden bg-white border-t border-gray-200 shadow-lg">
           <div className="px-4 py-2 space-y-1">
-            {navItems.map((item) => (
+            {leftNavItems.map((item) => (
               <button
                 key={item.name}
                 onClick={() => handleNavClick(item)}
@@ -105,7 +108,7 @@ const Navigation = () => {
               }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors mt-4"
             >
-              Sign Up
+              Signup
             </button>
           </div>
         </div>

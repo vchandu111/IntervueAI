@@ -66,12 +66,7 @@ const Signup = () => {
         {/* Left Section - Marketing */}
         <div className="lg:col-span-1 xl:col-span-2 space-y-6 sm:space-y-8 text-center lg:text-left">
           {/* Limited Time Offer */}
-          <div className="flex items-center justify-center lg:justify-start gap-2">
-            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
-            <span className="text-gray-500 text-sm font-medium">
-              LIMITED TIME OFFER
-            </span>
-          </div>
+          
 
           {/* CTA Button */}
           <button className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-base sm:text-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-1 flex items-center justify-center lg:justify-start gap-2 sm:gap-3 w-full sm:w-auto">
