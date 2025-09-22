@@ -1,10 +1,12 @@
 import os
 import json
 import uuid
+import io
 from typing import List, Dict, Optional, Literal, TypedDict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from langgraph.graph import StateGraph, START, END
@@ -13,6 +15,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
+import openai
 
 load_dotenv()
 
@@ -42,6 +45,9 @@ if not OPENAI_API_KEY:
 
 llm = ChatOpenAI(model="gpt-4", temperature=0.7, api_key=OPENAI_API_KEY)
 parser = StrOutputParser()
+
+# Initialize OpenAI client for TTS
+openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # ---------------------------
 # Prompts
@@ -436,6 +442,10 @@ class SubmitAnswerResponse(BaseModel):
     next_question_idx: Optional[int] = None
     next_question: Optional[str] = None
 
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "alloy"  # Default voice
+
 @app.post("/sessions")
 async def create_session(payload:CreateSessionRequest):
     try:
@@ -619,4 +629,31 @@ async def get_report(session_id: str):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to get report: {str(e)}")
+
+@app.post("/tts")
+async def text_to_speech(request: TTSRequest):
+    """Convert text to speech using OpenAI TTS API"""
+    try:
+        print(f"Generating TTS for text: {request.text[:100]}...")
+        
+        # Generate speech using OpenAI TTS
+        response = openai_client.audio.speech.create(
+            model="tts-1",
+            voice=request.voice,
+            input=request.text
+        )
+        
+        # Convert response to bytes
+        audio_bytes = response.content
+        
+        # Return audio as streaming response
+        return StreamingResponse(
+            io.BytesIO(audio_bytes),
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": "inline; filename=speech.mp3"}
+        )
+        
+    except Exception as e:
+        print(f"Error generating TTS: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate speech: {str(e)}")
 
