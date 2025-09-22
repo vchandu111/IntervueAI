@@ -4,7 +4,7 @@ import uuid
 import io
 from typing import List, Dict, Optional, Literal, TypedDict
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -656,4 +656,32 @@ async def text_to_speech(request: TTSRequest):
     except Exception as e:
         print(f"Error generating TTS: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate speech: {str(e)}")
+
+@app.post("/whisper")
+async def speech_to_text(audio_file: UploadFile = File(...)):
+    """Convert speech to text using OpenAI Whisper API"""
+    try:
+        print(f"Processing audio file: {audio_file.filename}")
+        
+        # Read the audio file
+        audio_content = await audio_file.read()
+        
+        # Create a file-like object for OpenAI API
+        audio_file_obj = io.BytesIO(audio_content)
+        audio_file_obj.name = audio_file.filename or "audio.webm"
+        
+        # Transcribe using OpenAI Whisper
+        transcript = openai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file_obj,
+            response_format="text"
+        )
+        
+        print(f"Transcription result: {transcript}")
+        
+        return {"text": transcript.strip()}
+        
+    except Exception as e:
+        print(f"Error in speech-to-text: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to transcribe audio: {str(e)}")
 

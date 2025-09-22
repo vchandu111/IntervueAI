@@ -14,6 +14,9 @@ import {
   MessageSquare,
   Volume2,
   VolumeX,
+  Mic,
+  MicOff,
+  Square,
 } from "lucide-react";
 
 const AIInterview = () => {
@@ -37,7 +40,12 @@ const AIInterview = () => {
   const [nextQuestionIndex, setNextQuestionIndex] = useState(null);
   const [isGivingFeedback, setIsGivingFeedback] = useState(false);
   const [hasSubmittedAnswer, setHasSubmittedAnswer] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [transcribedText, setTranscribedText] = useState("");
   const audioRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   const fetchFinalReport = React.useCallback(async () => {
     if (!sessionData?.session_id) return;
@@ -231,6 +239,78 @@ const AIInterview = () => {
       alert("Failed to start interview. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Speech-to-text function using Whisper
+  const transcribeAudio = async (audioBlob) => {
+    try {
+      setIsProcessingAudio(true);
+
+      const formData = new FormData();
+      formData.append("audio_file", audioBlob, "audio.webm");
+
+      const response = await fetch("http://localhost:3000/whisper", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.text;
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      throw error;
+    } finally {
+      setIsProcessingAudio(false);
+    }
+  };
+
+  // Start recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
+        try {
+          const transcribedText = await transcribeAudio(audioBlob);
+          setTranscribedText(transcribedText);
+          setCurrentAnswer(transcribedText);
+        } catch (error) {
+          console.error("Transcription failed:", error);
+          alert("Failed to transcribe audio. Please try again.");
+        }
+
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      alert("Failed to access microphone. Please check permissions.");
+    }
+  };
+
+  // Stop recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
     }
   };
 
@@ -570,25 +650,102 @@ const AIInterview = () => {
                   </div>
                 </div>
 
-                {/* Enhanced Answer Input */}
+                {/* Enhanced Voice Answer Input */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg flex items-center justify-center">
-                      <User className="w-4 h-4 text-white" />
+                      <Mic className="w-4 h-4 text-white" />
                     </div>
                     <label className="text-lg font-semibold text-gray-800">
                       Your Answer
                     </label>
                   </div>
 
+                  {/* Voice Recording Controls */}
+                  <div className="flex items-center justify-center gap-4 mb-4">
+                    {!isRecording ? (
+                      <button
+                        onClick={startRecording}
+                        disabled={isProcessingAudio || isSubmittingAnswer}
+                        className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                      >
+                        <Mic className="w-5 h-5" />
+                        <span>Start Recording</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopRecording}
+                        className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl font-semibold transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1"
+                      >
+                        <Square className="w-5 h-5" />
+                        <span>Stop Recording</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Recording Status */}
+                  {isRecording && (
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-2 text-red-500">
+                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium">
+                          Recording... Speak now
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Processing Status */}
+                  {isProcessingAudio && (
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-2 text-blue-500">
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-sm font-medium">
+                          Processing your speech...
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transcribed Text Display */}
+                  {transcribedText && (
+                    <div className="relative group">
+                      <div className="w-full px-6 py-4 border border-gray-200 rounded-xl bg-blue-50/50 text-lg shadow-sm">
+                        <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
+                            <Volume2 className="w-3 h-3 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-gray-700 leading-relaxed">
+                              {transcribedText}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Transcribed from your voice
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setTranscribedText("");
+                          setCurrentAnswer("");
+                        }}
+                        className="absolute top-2 right-2 w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center transition-colors"
+                      >
+                        <span className="text-gray-600 text-xs">×</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Manual Text Input (Fallback) */}
                   <div className="relative group">
                     <textarea
                       value={currentAnswer}
                       onChange={(e) => setCurrentAnswer(e.target.value)}
                       className="w-full px-6 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-lg resize-none shadow-sm bg-white/95 backdrop-blur-sm group-hover:shadow-md group-hover:border-gray-300"
-                      rows={6}
-                      placeholder="Share your thoughts and experience here. Be specific and provide examples when possible..."
-                      disabled={isSubmittingAnswer}
+                      rows={4}
+                      placeholder="Or type your answer here if you prefer..."
+                      disabled={isSubmittingAnswer || isRecording}
                     />
                     <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md border border-gray-100">
                       {currentAnswer.length} characters
