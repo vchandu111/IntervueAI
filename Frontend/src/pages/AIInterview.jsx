@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
+  Bot,
+  User,
   Briefcase,
   Clock,
   ArrowRight,
@@ -10,6 +12,8 @@ import {
   Send,
   CheckCircle,
   MessageSquare,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
 const AIInterview = () => {
@@ -26,6 +30,14 @@ const AIInterview = () => {
   const [interviewProgress, setInterviewProgress] = useState([]);
   const [finalReport, setFinalReport] = useState(null);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isUserReady, setIsUserReady] = useState(false);
+  const [showNextQuestionButton, setShowNextQuestionButton] = useState(false);
+  const [nextQuestionIndex, setNextQuestionIndex] = useState(null);
+  const [isGivingFeedback, setIsGivingFeedback] = useState(false);
+  const [hasSubmittedAnswer, setHasSubmittedAnswer] = useState(false);
+  const audioRef = useRef(null);
 
   const fetchFinalReport = React.useCallback(async () => {
     if (!sessionData?.session_id) return;
@@ -50,6 +62,68 @@ const AIInterview = () => {
     }
   }, [sessionData?.session_id]);
 
+  // TTS function to convert text to speech
+  const speakText = React.useCallback(
+    async (text, voice = "alloy") => {
+      if (!isAudioEnabled || !text.trim()) return Promise.resolve();
+
+      return new Promise((resolve, reject) => {
+        try {
+          setIsPlayingAudio(true);
+
+          fetch("http://localhost:3000/tts", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text: text,
+              voice: voice,
+            }),
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              return response.blob();
+            })
+            .then((audioBlob) => {
+              const audioUrl = URL.createObjectURL(audioBlob);
+
+              if (audioRef.current) {
+                audioRef.current.src = audioUrl;
+                audioRef.current.play();
+
+                audioRef.current.onended = () => {
+                  setIsPlayingAudio(false);
+                  URL.revokeObjectURL(audioUrl);
+                  resolve();
+                };
+
+                audioRef.current.onerror = () => {
+                  setIsPlayingAudio(false);
+                  URL.revokeObjectURL(audioUrl);
+                  reject(new Error("Audio playback failed"));
+                };
+              } else {
+                reject(new Error("Audio element not available"));
+              }
+            })
+            .catch((error) => {
+              console.error("Error generating speech:", error);
+              setIsPlayingAudio(false);
+              reject(error);
+            });
+        } catch (error) {
+          console.error("Error in speakText:", error);
+          setIsPlayingAudio(false);
+          reject(error);
+        }
+      });
+    },
+    [isAudioEnabled]
+  );
+
   // Fetch report when currentStep changes to "report"
   React.useEffect(() => {
     if (
@@ -67,6 +141,50 @@ const AIInterview = () => {
     sessionData?.session_id,
     fetchFinalReport,
   ]);
+
+  // Auto-speak questions when they change (only after user is ready)
+  React.useEffect(() => {
+    if (
+      currentStep === "interview" &&
+      sessionData?.questions &&
+      sessionData.questions[currentQuestionIndex] &&
+      isUserReady
+    ) {
+      const currentQuestion = sessionData.questions[currentQuestionIndex];
+      speakText(currentQuestion);
+    }
+  }, [
+    currentQuestionIndex,
+    currentStep,
+    sessionData?.questions,
+    speakText,
+    isUserReady,
+  ]);
+
+  // Handle "I'm Ready" button click
+  const handleReadyClick = () => {
+    setIsUserReady(true);
+    // Speak the first question
+    if (sessionData?.questions && sessionData.questions[0]) {
+      const firstQuestion = sessionData.questions[0];
+      speakText(firstQuestion);
+    }
+  };
+
+  const handleNextQuestion = () => {
+    if (nextQuestionIndex !== null) {
+      setCurrentQuestionIndex(nextQuestionIndex);
+      setCurrentAnswer("");
+      setShowNextQuestionButton(false);
+      setNextQuestionIndex(null);
+      setIsGivingFeedback(false);
+      setHasSubmittedAnswer(false);
+
+      // Speak the next question
+      const nextQuestion = sessionData.questions[nextQuestionIndex];
+      speakText(nextQuestion);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -103,6 +221,11 @@ const AIInterview = () => {
       setSessionData(sessionResponse);
       setCurrentStep("interview");
       setCurrentQuestionIndex(0);
+      setIsUserReady(false);
+
+      // Welcome message with TTS
+      const welcomeMessage = `Welcome to your AI interview session for ${formData.role} position. I'm your AI interviewer, and I'll be asking you 5 questions based on your ${formData.experience} years of experience. Please click the "I'm Ready" button when you're prepared to begin.`;
+      speakText(welcomeMessage);
     } catch (error) {
       console.error("Error creating session:", error);
       alert("Failed to start interview. Please try again.");
@@ -154,30 +277,48 @@ const AIInterview = () => {
         },
       ]);
 
-      // Check if interview is complete
-      if (
-        answerResponse.next_question_idx === null ||
-        answerResponse.next_question_idx === undefined
-      ) {
-        console.log("Interview complete! Moving to report step.");
-        setCurrentStep("report");
-      } else if (currentQuestionIndex >= 4) {
-        // Fallback: if we're on question 5 (index 4) and still getting a next question, complete the interview
-        console.log(
-          "Fallback: Interview complete after 5 questions. Moving to report step."
-        );
-        setCurrentStep("report");
-      } else {
-        console.log(
-          "Moving to next question:",
-          answerResponse.next_question_idx
-        );
-        setCurrentQuestionIndex(answerResponse.next_question_idx);
-        setCurrentAnswer("");
-      }
+      // Set feedback state and speak the feedback
+      setIsGivingFeedback(true);
+      setHasSubmittedAnswer(true);
+      const feedbackText = answerResponse.user_feedback;
+
+      // Store the next question index for the "Next Question" button
+      setNextQuestionIndex(answerResponse.next_question_idx);
+
+      // Speak feedback and handle completion based on audio ending
+      speakText(feedbackText)
+        .then(() => {
+          // This will be called when audio finishes
+          setIsGivingFeedback(false);
+
+          // Check if interview is complete
+          if (
+            answerResponse.next_question_idx === null ||
+            answerResponse.next_question_idx === undefined
+          ) {
+            console.log("Interview complete! Moving to report step.");
+            setCurrentStep("report");
+          } else if (currentQuestionIndex >= 4) {
+            // Fallback: if we're on question 5 (index 4) and still getting a next question, complete the interview
+            console.log(
+              "Fallback: Interview complete after 5 questions. Moving to report step."
+            );
+            setCurrentStep("report");
+          } else {
+            // Show "Next Question" button after feedback is spoken
+            setShowNextQuestionButton(true);
+          }
+        })
+        .catch(() => {
+          // If audio fails, still proceed
+          setIsGivingFeedback(false);
+          setShowNextQuestionButton(true);
+        });
     } catch (error) {
       console.error("Error submitting answer:", error);
       alert("Failed to submit answer. Please try again.");
+      setIsGivingFeedback(false);
+      setHasSubmittedAnswer(false);
     } finally {
       setIsSubmittingAnswer(false);
     }
@@ -208,130 +349,300 @@ const AIInterview = () => {
   // Render different steps
   if (currentStep === "interview") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 py-12 sm:py-16 lg:py-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              AI Interview Session
+      <div className="min-h-screen bg-gray-100 py-8 relative overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-200/30 to-purple-200/30 rounded-full blur-3xl animate-pulse"></div>
+          <div
+            className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-indigo-200/30 to-pink-200/30 rounded-full blur-3xl animate-pulse"
+            style={{ animationDelay: "2s" }}
+          ></div>
+          <div
+            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-br from-cyan-200/20 to-blue-200/20 rounded-full blur-3xl animate-pulse"
+            style={{ animationDelay: "4s" }}
+          ></div>
+
+          {/* Floating particles */}
+          <div
+            className="absolute top-20 left-10 w-2 h-2 bg-blue-400/40 rounded-full animate-bounce"
+            style={{ animationDelay: "0s", animationDuration: "3s" }}
+          ></div>
+          <div
+            className="absolute top-40 right-20 w-3 h-3 bg-purple-400/40 rounded-full animate-bounce"
+            style={{ animationDelay: "1s", animationDuration: "4s" }}
+          ></div>
+          <div
+            className="absolute bottom-40 left-20 w-2 h-2 bg-indigo-400/40 rounded-full animate-bounce"
+            style={{ animationDelay: "2s", animationDuration: "3.5s" }}
+          ></div>
+          <div
+            className="absolute bottom-20 right-10 w-3 h-3 bg-cyan-400/40 rounded-full animate-bounce"
+            style={{ animationDelay: "3s", animationDuration: "4.5s" }}
+          ></div>
+        </div>
+
+        {/* Hidden audio element for TTS */}
+        <audio ref={audioRef} preload="none" />
+
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          {/* Header with AI Avatar */}
+          <div className="text-center mb-16">
+            <div className="flex items-center justify-center mb-8">
+              {/* AI Avatar with Enhanced Design */}
+              <div className="relative group">
+                {/* Outer glow ring */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400 via-purple-500 to-indigo-600 blur-lg opacity-60 group-hover:opacity-80 transition-opacity duration-300 animate-pulse"></div>
+
+                {/* Main avatar container */}
+                <div className="relative w-24 h-24 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-full flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-300">
+                  {/* Glassmorphism inner circle */}
+                  <div className="w-20 h-20 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 shadow-inner">
+                    <Bot className="w-10 h-10 text-blue-600" />
+                  </div>
+                </div>
+
+                {/* Animated rings */}
+                <div className="absolute inset-0 rounded-full border-2 border-blue-300/50 animate-ping"></div>
+                <div
+                  className="absolute inset-0 rounded-full border border-purple-300/30 animate-pulse"
+                  style={{ animationDelay: "1s" }}
+                ></div>
+
+                {/* Floating sparkles */}
+                <div
+                  className="absolute -top-1 -left-1 w-2 h-2 bg-yellow-400 rounded-full animate-ping"
+                  style={{ animationDelay: "0.5s" }}
+                ></div>
+                <div
+                  className="absolute -bottom-1 -right-1 w-1.5 h-1.5 bg-pink-400 rounded-full animate-ping"
+                  style={{ animationDelay: "1.5s" }}
+                ></div>
+              </div>
+            </div>
+
+            <h1 className="text-4xl sm:text-5xl font-bold mb-6">
+              <span className="bg-gradient-to-r from-gray-800 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+                AI Interview Session
+              </span>
             </h1>
-            <div className="flex items-center justify-center gap-4 text-sm text-gray-600">
-              <span>Role: {sessionData?.job_role}</span>
-              <span>•</span>
-              <span>Experience: {sessionData?.experience} years</span>
-              <span>•</span>
-              <span>Question {currentQuestionIndex + 1} of 5</span>
+
+            <div className="flex flex-wrap items-center justify-center gap-8 text-sm mb-6">
+              <div className="flex items-center gap-3 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20 shadow-lg">
+                <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full animate-pulse"></div>
+                <span className="font-medium text-gray-700">
+                  Role: {sessionData?.job_role}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20 shadow-lg">
+                <div
+                  className="w-3 h-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-pulse"
+                  style={{ animationDelay: "0.5s" }}
+                ></div>
+                <span className="font-medium text-gray-700">
+                  Experience: {sessionData?.experience} years
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Progress Bar */}
-          <div className="mb-8">
-            <div className="flex justify-between text-sm text-gray-600 mb-2">
-              <span>Progress</span>
-              <span>{currentQuestionIndex + 1}/5</span>
+          {/* I'm Ready Button - Show only when user is not ready yet */}
+          {!isUserReady && (
+            <div className="text-center mb-16">
+              <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-16 border border-white/20 max-w-3xl mx-auto relative overflow-hidden">
+                {/* Background decoration */}
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-indigo-50/50 rounded-3xl"></div>
+                <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-200/20 to-purple-200/20 rounded-full blur-2xl"></div>
+                <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-indigo-200/20 to-pink-200/20 rounded-full blur-2xl"></div>
+
+                <div className="relative z-10">
+                  <div className="relative mb-10">
+                    {/* Enhanced decorative elements */}
+                    <div className="absolute -top-4 -left-4 w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-bounce shadow-lg"></div>
+                    <div
+                      className="absolute -bottom-4 -right-4 w-6 h-6 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-bounce shadow-lg"
+                      style={{ animationDelay: "0.5s" }}
+                    ></div>
+                    <div
+                      className="absolute top-1/2 -left-8 w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-bounce shadow-lg"
+                      style={{ animationDelay: "1s" }}
+                    ></div>
+                    <div
+                      className="absolute top-1/2 -right-8 w-5 h-5 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full animate-bounce shadow-lg"
+                      style={{ animationDelay: "1.5s" }}
+                    ></div>
+                  </div>
+
+                  <h2 className="text-4xl font-bold mb-8">
+                    <span className="bg-gradient-to-r from-gray-800 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      Ready to Begin Your Interview?
+                    </span>
+                  </h2>
+
+                  <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed">
+                    Take a moment to prepare yourself. When you're ready, click
+                    the button below to start with the first question. Good
+                    luck! 🍀
+                  </p>
+
+                  <button
+                    onClick={handleReadyClick}
+                    disabled={isPlayingAudio}
+                    className="bg-gradient-to-r from-green-500 via-blue-500 to-purple-600 text-white px-16 py-6 rounded-3xl font-bold text-2xl transition-all duration-500 hover:shadow-2xl transform hover:-translate-y-3 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-6 mx-auto relative overflow-hidden group"
+                  >
+                    {/* Button glow effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-blue-400 to-purple-500 blur-lg opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
+
+                    {isPlayingAudio ? (
+                      <>
+                        <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Please wait...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-3xl group-hover:animate-bounce">
+                          🚀
+                        </span>
+                        <span>I'm Ready!</span>
+                        <span className="text-3xl group-hover:animate-pulse">
+                          ✨
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+          )}
+
+          {/* Question Card - Show only when user is ready */}
+          {isUserReady && (
+            <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/30 mb-12 max-w-4xl mx-auto relative overflow-hidden">
+              {/* Enhanced Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/40 via-purple-50/30 to-indigo-50/40 rounded-3xl"></div>
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-200/20 to-purple-200/20 rounded-full blur-3xl animate-pulse"></div>
               <div
-                className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${((currentQuestionIndex + 1) / 5) * 100}%` }}
+                className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-indigo-200/20 to-pink-200/20 rounded-full blur-3xl animate-pulse"
+                style={{ animationDelay: "2s" }}
               ></div>
-            </div>
-          </div>
+              <div
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-gradient-to-br from-cyan-200/15 to-blue-200/15 rounded-full blur-2xl animate-pulse"
+                style={{ animationDelay: "4s" }}
+              ></div>
 
-          {/* Question Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
-            <div className="flex items-start space-x-4 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                <MessageSquare className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                  Question {currentQuestionIndex + 1}
-                </h2>
-                <p className="text-gray-700 text-lg leading-relaxed">
-                  {sessionData?.questions[currentQuestionIndex]}
-                </p>
-              </div>
-            </div>
+              <div className="relative z-10">
+                {/* Enhanced Replay Question Button */}
+                <div className="flex justify-end mb-6">
+                  <button
+                    onClick={() => {
+                      const currentQuestion =
+                        sessionData?.questions[currentQuestionIndex];
+                      speakText(currentQuestion);
+                    }}
+                    disabled={!isAudioEnabled || isPlayingAudio}
+                    className="group flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5 hover:bg-white/90"
+                  >
+                    <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <Volume2 size={12} className="text-white" />
+                    </div>
+                    <span className="font-medium text-sm">Replay</span>
+                  </button>
+                </div>
 
-            {/* Answer Input */}
-            <div className="space-y-4">
-              <label className="block text-sm font-semibold text-gray-700">
-                Your Answer
-              </label>
-              <textarea
-                value={currentAnswer}
-                onChange={(e) => setCurrentAnswer(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-base resize-none"
-                rows={6}
-                placeholder="Type your answer here..."
-                disabled={isSubmittingAnswer}
-              />
-            </div>
+                {/* Enhanced Question Content */}
+                <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-gray-100/80 shadow-lg relative overflow-hidden">
+                  {/* Subtle background effects */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-50/30 via-transparent to-purple-50/30 rounded-2xl"></div>
+                  <div className="absolute -top-2 -right-2 w-16 h-16 bg-gradient-to-br from-blue-200/5 to-purple-200/5 rounded-full blur-xl"></div>
+                  <div className="absolute -bottom-2 -left-2 w-12 h-12 bg-gradient-to-br from-indigo-200/5 to-pink-200/5 rounded-full blur-xl"></div>
 
-            {/* Submit Button */}
-            <div className="mt-6">
-              <button
-                onClick={handleAnswerSubmit}
-                disabled={!currentAnswer.trim() || isSubmittingAnswer}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-xl font-semibold text-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3"
-              >
-                {isSubmittingAnswer ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Evaluating Answer...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-5 h-5" />
-                    Submit Answer
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Current Question Feedback */}
-          {interviewProgress.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Your Latest Feedback
-              </h3>
-              {(() => {
-                const latestFeedback =
-                  interviewProgress[interviewProgress.length - 1];
-                return (
-                  <div className="bg-white rounded-xl p-6 border border-gray-100">
-                    <div className="flex items-start space-x-3 mb-4">
-                      <CheckCircle className="w-5 h-5 text-green-500 mt-1 flex-shrink-0" />
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900 mb-2">
-                          Question {interviewProgress.length}
-                        </h4>
-                        <p className="text-gray-700 mb-3">
-                          {latestFeedback.question}
-                        </p>
-                        <div className="bg-blue-50 rounded-lg p-3 mb-3">
-                          <p className="text-sm font-medium text-blue-900 mb-1">
-                            Your Answer:
-                          </p>
-                          <p className="text-blue-800">
-                            {latestFeedback.answer}
-                          </p>
-                        </div>
-                        <div className="bg-green-50 rounded-lg p-3">
-                          <p className="text-sm font-medium text-green-900 mb-1">
-                            AI Feedback:
-                          </p>
-                          <p className="text-green-800 whitespace-pre-wrap">
-                            {latestFeedback.user_feedback}
-                          </p>
-                        </div>
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                        <MessageSquare className="w-4 h-4 text-white" />
                       </div>
+                      <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                        Question
+                      </span>
+                    </div>
+                    <p className="text-gray-800 text-xl leading-relaxed font-medium">
+                      {sessionData?.questions[currentQuestionIndex]}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Enhanced Answer Input */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg flex items-center justify-center">
+                      <User className="w-4 h-4 text-white" />
+                    </div>
+                    <label className="text-lg font-semibold text-gray-800">
+                      Your Answer
+                    </label>
+                  </div>
+
+                  <div className="relative group">
+                    <textarea
+                      value={currentAnswer}
+                      onChange={(e) => setCurrentAnswer(e.target.value)}
+                      className="w-full px-6 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-lg resize-none shadow-sm bg-white/95 backdrop-blur-sm group-hover:shadow-md group-hover:border-gray-300"
+                      rows={6}
+                      placeholder="Share your thoughts and experience here. Be specific and provide examples when possible..."
+                      disabled={isSubmittingAnswer}
+                    />
+                    <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md border border-gray-100">
+                      {currentAnswer.length} characters
                     </div>
                   </div>
-                );
-              })()}
+                </div>
+
+                {/* Enhanced Submit Button - Hide during feedback and after submission */}
+                {!isGivingFeedback && !hasSubmittedAnswer && (
+                  <div className="mt-6">
+                    <button
+                      onClick={handleAnswerSubmit}
+                      disabled={!currentAnswer.trim() || isSubmittingAnswer}
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3 relative overflow-hidden group"
+                    >
+                      {isSubmittingAnswer ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Evaluating Your Answer...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-5 h-5" />
+                          <span>Submit Answer</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Enhanced Feedback Status - Show during feedback */}
+                {isGivingFeedback && (
+                  <div className="mt-6 text-center">
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg flex items-center justify-center gap-3 shadow-lg">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>AI is providing feedback...</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Next Question Button - Show after feedback is spoken */}
+          {showNextQuestionButton && (
+            <div className="text-center mt-8">
+              <button
+                onClick={handleNextQuestion}
+                disabled={isGivingFeedback}
+                className="bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3 mx-auto"
+              >
+                <ArrowRight className="w-5 h-5" />
+                <span>Next Question</span>
+              </button>
             </div>
           )}
         </div>
@@ -487,6 +798,13 @@ const AIInterview = () => {
                 setInterviewProgress([]);
                 setFinalReport(null);
                 setFormData({ role: "", experience: "" });
+                setIsPlayingAudio(false);
+                setIsAudioEnabled(true);
+                setIsUserReady(false);
+                if (audioRef.current) {
+                  audioRef.current.pause();
+                  audioRef.current.src = "";
+                }
               }}
               className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-xl font-semibold transition-all duration-200 hover:shadow-xl transform hover:-translate-y-1"
             >
