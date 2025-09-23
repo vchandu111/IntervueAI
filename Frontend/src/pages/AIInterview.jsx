@@ -61,7 +61,6 @@ const AIInterview = () => {
       }
 
       const reportData = await response.json();
-      console.log("Final report:", reportData);
       setFinalReport(reportData);
     } catch (error) {
       console.error("Error fetching final report:", error);
@@ -118,12 +117,10 @@ const AIInterview = () => {
               }
             })
             .catch((error) => {
-              console.error("Error generating speech:", error);
               setIsPlayingAudio(false);
               reject(error);
             });
         } catch (error) {
-          console.error("Error in speakText:", error);
           setIsPlayingAudio(false);
           reject(error);
         }
@@ -224,7 +221,6 @@ const AIInterview = () => {
       }
 
       const sessionResponse = await response.json();
-      console.log("Session created:", sessionResponse);
 
       setSessionData(sessionResponse);
       setCurrentStep("interview");
@@ -235,7 +231,6 @@ const AIInterview = () => {
       const welcomeMessage = `Welcome to your AI interview session for ${formData.role} position. I'm your AI interviewer, and I'll be asking you 5 questions based on your ${formData.experience} years of experience. Please click the "I'm Ready" button when you're prepared to begin.`;
       speakText(welcomeMessage);
     } catch (error) {
-      console.error("Error creating session:", error);
       alert("Failed to start interview. Please try again.");
     } finally {
       setIsLoading(false);
@@ -262,7 +257,6 @@ const AIInterview = () => {
       const result = await response.json();
       return result.text;
     } catch (error) {
-      console.error("Error transcribing audio:", error);
       throw error;
     } finally {
       setIsProcessingAudio(false);
@@ -290,18 +284,14 @@ const AIInterview = () => {
           setTranscribedText(transcribedText);
           setCurrentAnswer(transcribedText);
         } catch (error) {
-          console.error("Transcription failed:", error);
           alert("Failed to transcribe audio. Please try again.");
         }
-
-        // Stop all tracks to release microphone
         stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorder.start();
       setIsRecording(true);
     } catch (error) {
-      console.error("Error starting recording:", error);
       alert("Failed to access microphone. Please check permissions.");
     }
   };
@@ -338,11 +328,7 @@ const AIInterview = () => {
       }
 
       const answerResponse = await response.json();
-      console.log("Answer submitted:", answerResponse);
-      console.log("Next question idx:", answerResponse.next_question_idx);
-      console.log("Current question index:", currentQuestionIndex);
 
-      // Add to progress
       setInterviewProgress((prev) => [
         ...prev,
         {
@@ -357,45 +343,30 @@ const AIInterview = () => {
         },
       ]);
 
-      // Set feedback state and speak the feedback
       setIsGivingFeedback(true);
       setHasSubmittedAnswer(true);
       const feedbackText = answerResponse.user_feedback;
-
-      // Store the next question index for the "Next Question" button
       setNextQuestionIndex(answerResponse.next_question_idx);
 
-      // Speak feedback and handle completion based on audio ending
       speakText(feedbackText)
         .then(() => {
-          // This will be called when audio finishes
           setIsGivingFeedback(false);
-
-          // Check if interview is complete
           if (
             answerResponse.next_question_idx === null ||
             answerResponse.next_question_idx === undefined
           ) {
-            console.log("Interview complete! Moving to report step.");
             setCurrentStep("report");
           } else if (currentQuestionIndex >= 4) {
-            // Fallback: if we're on question 5 (index 4) and still getting a next question, complete the interview
-            console.log(
-              "Fallback: Interview complete after 5 questions. Moving to report step."
-            );
             setCurrentStep("report");
           } else {
-            // Show "Next Question" button after feedback is spoken
             setShowNextQuestionButton(true);
           }
         })
         .catch(() => {
-          // If audio fails, still proceed
           setIsGivingFeedback(false);
           setShowNextQuestionButton(true);
         });
     } catch (error) {
-      console.error("Error submitting answer:", error);
       alert("Failed to submit answer. Please try again.");
       setIsGivingFeedback(false);
       setHasSubmittedAnswer(false);
@@ -426,386 +397,215 @@ const AIInterview = () => {
     },
   ];
 
-  // Render different steps
+  // ------------------- INTERVIEW SCREEN LAYOUT ONLY IS CHANGED BELOW -----------------------
   if (currentStep === "interview") {
     return (
-      <div className="min-h-screen bg-gray-100 py-8 relative overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-200/30 to-purple-200/30 rounded-full blur-3xl animate-pulse"></div>
-          <div
-            className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-indigo-200/30 to-pink-200/30 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: "2s" }}
-          ></div>
-          <div
-            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-br from-cyan-200/20 to-blue-200/20 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: "4s" }}
-          ></div>
-
-          {/* Floating particles */}
-          <div
-            className="absolute top-20 left-10 w-2 h-2 bg-blue-400/40 rounded-full animate-bounce"
-            style={{ animationDelay: "0s", animationDuration: "3s" }}
-          ></div>
-          <div
-            className="absolute top-40 right-20 w-3 h-3 bg-purple-400/40 rounded-full animate-bounce"
-            style={{ animationDelay: "1s", animationDuration: "4s" }}
-          ></div>
-          <div
-            className="absolute bottom-40 left-20 w-2 h-2 bg-indigo-400/40 rounded-full animate-bounce"
-            style={{ animationDelay: "2s", animationDuration: "3.5s" }}
-          ></div>
-          <div
-            className="absolute bottom-20 right-10 w-3 h-3 bg-cyan-400/40 rounded-full animate-bounce"
-            style={{ animationDelay: "3s", animationDuration: "4.5s" }}
-          ></div>
-        </div>
-
+      <div className="min-h-screen bg-white flex flex-col justify-center items-center py-12 px-4">
         {/* Hidden audio element for TTS */}
         <audio ref={audioRef} preload="none" />
 
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          {/* Header with AI Avatar */}
+        {/* I'm Ready Button - Show only when user is not ready yet */}
+        {!isUserReady && (
           <div className="text-center mb-16">
-            <div className="flex items-center justify-center mb-8">
-              {/* AI Avatar with Enhanced Design */}
-              <div className="relative group">
-                {/* Outer glow ring */}
-                <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400 via-purple-500 to-indigo-600 blur-lg opacity-60 group-hover:opacity-80 transition-opacity duration-300 animate-pulse"></div>
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-16 border border-white/20 max-w-3xl mx-auto relative overflow-hidden">
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-indigo-50/50 rounded-3xl"></div>
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-200/20 to-purple-200/20 rounded-full blur-2xl"></div>
+              <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-indigo-200/20 to-pink-200/20 rounded-full blur-2xl"></div>
 
-                {/* Main avatar container */}
-                <div className="relative w-24 h-24 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-full flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform duration-300">
-                  {/* Glassmorphism inner circle */}
-                  <div className="w-20 h-20 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 shadow-inner">
-                    <Bot className="w-10 h-10 text-blue-600" />
-                  </div>
+              <div className="relative z-10">
+                <div className="relative mb-10">
+                  {/* Enhanced decorative elements */}
+                  <div className="absolute -top-4 -left-4 w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-bounce shadow-lg"></div>
+                  <div
+                    className="absolute -bottom-4 -right-4 w-6 h-6 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-bounce shadow-lg"
+                    style={{ animationDelay: "0.5s" }}
+                  ></div>
+                  <div
+                    className="absolute top-1/2 -left-8 w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-bounce shadow-lg"
+                    style={{ animationDelay: "1s" }}
+                  ></div>
+                  <div
+                    className="absolute top-1/2 -right-8 w-5 h-5 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full animate-bounce shadow-lg"
+                    style={{ animationDelay: "1.5s" }}
+                  ></div>
                 </div>
 
-                {/* Animated rings */}
-                <div className="absolute inset-0 rounded-full border-2 border-blue-300/50 animate-ping"></div>
-                <div
-                  className="absolute inset-0 rounded-full border border-purple-300/30 animate-pulse"
-                  style={{ animationDelay: "1s" }}
-                ></div>
+                <h2 className="text-4xl font-bold mb-8">
+                  <span className="bg-gradient-to-r from-gray-800 via-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    Ready to Begin Your Interview?
+                  </span>
+                </h2>
 
-                {/* Floating sparkles */}
-                <div
-                  className="absolute -top-1 -left-1 w-2 h-2 bg-yellow-400 rounded-full animate-ping"
-                  style={{ animationDelay: "0.5s" }}
-                ></div>
-                <div
-                  className="absolute -bottom-1 -right-1 w-1.5 h-1.5 bg-pink-400 rounded-full animate-ping"
-                  style={{ animationDelay: "1.5s" }}
-                ></div>
-              </div>
-            </div>
+                <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed">
+                  Take a moment to prepare yourself. When you're ready, click
+                  the button below to start with the first question. Good luck!
+                  🍀
+                </p>
 
-            <h1 className="text-4xl sm:text-5xl font-bold mb-6">
-              <span className="bg-gradient-to-r from-gray-800 via-blue-600 to-purple-600 bg-clip-text text-transparent">
-                AI Interview Session
-              </span>
-            </h1>
+                <button
+                  onClick={handleReadyClick}
+                  disabled={isPlayingAudio}
+                  className="bg-gradient-to-r from-green-500 via-blue-500 to-purple-600 text-white px-16 py-6 rounded-3xl font-bold text-2xl transition-all duration-500 hover:shadow-2xl transform hover:-translate-y-3 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-6 mx-auto relative overflow-hidden group"
+                >
+                  {/* Button glow effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-blue-400 to-purple-500 blur-lg opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
 
-            <div className="flex flex-wrap items-center justify-center gap-8 text-sm mb-6">
-              <div className="flex items-center gap-3 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20 shadow-lg">
-                <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full animate-pulse"></div>
-                <span className="font-medium text-gray-700">
-                  Role: {sessionData?.job_role}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 bg-white/60 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20 shadow-lg">
-                <div
-                  className="w-3 h-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-pulse"
-                  style={{ animationDelay: "0.5s" }}
-                ></div>
-                <span className="font-medium text-gray-700">
-                  Experience: {sessionData?.experience} years
-                </span>
+                  {isPlayingAudio ? (
+                    <>
+                      <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Please wait...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-3xl group-hover:animate-bounce">
+                        🚀
+                      </span>
+                      <span>I'm Ready!</span>
+                      <span className="text-3xl group-hover:animate-pulse">
+                        ✨
+                      </span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
+        )}
 
-          {/* I'm Ready Button - Show only when user is not ready yet */}
-          {!isUserReady && (
-            <div className="text-center mb-16">
-              <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-16 border border-white/20 max-w-3xl mx-auto relative overflow-hidden">
-                {/* Background decoration */}
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-indigo-50/50 rounded-3xl"></div>
-                <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-200/20 to-purple-200/20 rounded-full blur-2xl"></div>
-                <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-indigo-200/20 to-pink-200/20 rounded-full blur-2xl"></div>
-
-                <div className="relative z-10">
-                  <div className="relative mb-10">
-                    {/* Enhanced decorative elements */}
-                    <div className="absolute -top-4 -left-4 w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-bounce shadow-lg"></div>
-                    <div
-                      className="absolute -bottom-4 -right-4 w-6 h-6 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-bounce shadow-lg"
-                      style={{ animationDelay: "0.5s" }}
-                    ></div>
-                    <div
-                      className="absolute top-1/2 -left-8 w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full animate-bounce shadow-lg"
-                      style={{ animationDelay: "1s" }}
-                    ></div>
-                    <div
-                      className="absolute top-1/2 -right-8 w-5 h-5 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full animate-bounce shadow-lg"
-                      style={{ animationDelay: "1.5s" }}
-                    ></div>
-                  </div>
-
-                  <h2 className="text-4xl font-bold mb-8">
-                    <span className="bg-gradient-to-r from-gray-800 via-blue-600 to-purple-600 bg-clip-text text-transparent">
-                      Ready to Begin Your Interview?
-                    </span>
-                  </h2>
-
-                  <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed">
-                    Take a moment to prepare yourself. When you're ready, click
-                    the button below to start with the first question. Good
-                    luck! 🍀
-                  </p>
-
-                  <button
-                    onClick={handleReadyClick}
-                    disabled={isPlayingAudio}
-                    className="bg-gradient-to-r from-green-500 via-blue-500 to-purple-600 text-white px-16 py-6 rounded-3xl font-bold text-2xl transition-all duration-500 hover:shadow-2xl transform hover:-translate-y-3 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-6 mx-auto relative overflow-hidden group"
-                  >
-                    {/* Button glow effect */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-blue-400 to-purple-500 blur-lg opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
-
-                    {isPlayingAudio ? (
-                      <>
-                        <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Please wait...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-3xl group-hover:animate-bounce">
-                          🚀
-                        </span>
-                        <span>I'm Ready!</span>
-                        <span className="text-3xl group-hover:animate-pulse">
-                          ✨
-                        </span>
-                      </>
-                    )}
-                  </button>
+        {/* Interview Layout - Show only when user is ready */}
+        {isUserReady && (
+          <>
+            <div className="flex flex-col md:flex-row justify-center items-start md:items-center gap-12 md:gap-32 mb-16 w-full max-w-3xl">
+              {/* AI Interviewer Side */}
+              <div className="flex flex-col items-center w-full md:w-[320px] bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/20 hover:shadow-2xl transition-all duration-300">
+                <div className="w-36 h-36 rounded-full shadow-2xl overflow-hidden mb-6 border-4 border-white/50 flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-100 hover:scale-105 transition-transform duration-300">
+                  <img
+                    src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop&crop=face"
+                    alt="AI Interviewer"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
+                <div className="text-2xl font-bold text-gray-900 mb-2">
+                  AI Interviewer
+                </div>
+                <div className="text-green-600 text-lg font-semibold mb-6 bg-green-50 px-4 py-2 rounded-full border border-green-200">
+                  Online
+                </div>
+                <button
+                  onClick={() => {
+                    const currentQuestion =
+                      sessionData?.questions[currentQuestionIndex];
+                    speakText(currentQuestion);
+                  }}
+                  disabled={!isAudioEnabled || isPlayingAudio}
+                  className="w-full bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 hover:from-blue-100 hover:to-blue-200 transition-all duration-300 font-semibold rounded-xl px-6 py-4 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl border border-blue-200/50 disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1"
+                >
+                  <Volume2 className="w-5 h-5" />
+                  Replay Question
+                </button>
               </div>
-            </div>
-          )}
 
-          {/* Question Card - Show only when user is ready */}
-          {isUserReady && (
-            <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/30 mb-12 max-w-4xl mx-auto relative overflow-hidden">
-              {/* Enhanced Background decoration */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/40 via-purple-50/30 to-indigo-50/40 rounded-3xl"></div>
-              <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-200/20 to-purple-200/20 rounded-full blur-3xl animate-pulse"></div>
-              <div
-                className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-indigo-200/20 to-pink-200/20 rounded-full blur-3xl animate-pulse"
-                style={{ animationDelay: "2s" }}
-              ></div>
-              <div
-                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-gradient-to-br from-cyan-200/15 to-blue-200/15 rounded-full blur-2xl animate-pulse"
-                style={{ animationDelay: "4s" }}
-              ></div>
-
-              <div className="relative z-10">
-                {/* Enhanced Replay Question Button */}
-                <div className="flex justify-end mb-6">
+              {/* Your Response Side */}
+              <div className="flex flex-col items-center w-full md:w-[320px] bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/20 hover:shadow-2xl transition-all duration-300">
+                <div className="w-36 h-36 rounded-full shadow-2xl overflow-hidden mb-6 border-4 border-white/50 flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-100 hover:scale-105 transition-transform duration-300">
+                  <img
+                    src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=face"
+                    alt="Your Response"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="text-2xl font-bold text-gray-900 mb-2">
+                  Your Response
+                </div>
+                <div className="text-green-600 text-lg font-semibold mb-6 bg-green-50 px-4 py-2 rounded-full border border-green-200">
+                  Responding
+                </div>
+                {/* Record/Stop Button */}
+                {!isRecording ? (
                   <button
-                    onClick={() => {
-                      const currentQuestion =
-                        sessionData?.questions[currentQuestionIndex];
-                      speakText(currentQuestion);
-                    }}
-                    disabled={!isAudioEnabled || isPlayingAudio}
-                    className="group flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200/60 text-gray-700 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-0.5 hover:bg-white/90"
+                    onClick={startRecording}
+                    disabled={isProcessingAudio || isSubmittingAnswer}
+                    className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-all duration-300 font-semibold rounded-xl px-6 py-4 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1"
                   >
-                    <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                      <Volume2 size={12} className="text-white" />
-                    </div>
-                    <span className="font-medium text-sm">Replay</span>
+                    <Mic className="w-5 h-5" />
+                    Record Answer
                   </button>
-                </div>
-
-                {/* Enhanced Question Content */}
-                <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-6 mb-6 border border-gray-100/80 shadow-lg relative overflow-hidden">
-                  {/* Subtle background effects */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-50/30 via-transparent to-purple-50/30 rounded-2xl"></div>
-                  <div className="absolute -top-2 -right-2 w-16 h-16 bg-gradient-to-br from-blue-200/5 to-purple-200/5 rounded-full blur-xl"></div>
-                  <div className="absolute -bottom-2 -left-2 w-12 h-12 bg-gradient-to-br from-indigo-200/5 to-pink-200/5 rounded-full blur-xl"></div>
-
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                        <MessageSquare className="w-4 h-4 text-white" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">
-                        Question
-                      </span>
-                    </div>
-                    <p className="text-gray-800 text-xl leading-relaxed font-medium">
-                      {sessionData?.questions[currentQuestionIndex]}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Enhanced Voice Answer Input */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg flex items-center justify-center">
-                      <Mic className="w-4 h-4 text-white" />
-                    </div>
-                    <label className="text-lg font-semibold text-gray-800">
-                      Your Answer
-                    </label>
-                  </div>
-
-                  {/* Voice Recording Controls */}
-                  <div className="flex items-center justify-center gap-4 mb-4">
-                    {!isRecording ? (
-                      <button
-                        onClick={startRecording}
-                        disabled={isProcessingAudio || isSubmittingAnswer}
-                        className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                      >
-                        <Mic className="w-5 h-5" />
-                        <span>Start Recording</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={stopRecording}
-                        className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl font-semibold transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1"
-                      >
-                        <Square className="w-5 h-5" />
-                        <span>Stop Recording</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Recording Status */}
-                  {isRecording && (
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-2 text-red-500">
-                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                        <span className="text-sm font-medium">
-                          Recording... Speak now
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Processing Status */}
-                  {isProcessingAudio && (
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-2 text-blue-500">
-                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-sm font-medium">
-                          Processing your speech...
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Transcribed Text Display */}
-                  {transcribedText && (
-                    <div className="relative group">
-                      <div className="w-full px-6 py-4 border border-gray-200 rounded-xl bg-blue-50/50 text-lg shadow-sm">
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                            <Volume2 className="w-3 h-3 text-white" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-gray-700 leading-relaxed">
-                              {transcribedText}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-2">
-                              Transcribed from your voice
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setTranscribedText("");
-                          setCurrentAnswer("");
-                        }}
-                        className="absolute top-2 right-2 w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center transition-colors"
-                      >
-                        <span className="text-gray-600 text-xs">×</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Manual Text Input (Fallback) */}
-                  <div className="relative group">
-                    <textarea
-                      value={currentAnswer}
-                      onChange={(e) => setCurrentAnswer(e.target.value)}
-                      className="w-full px-6 py-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-300 text-lg resize-none shadow-sm bg-white/95 backdrop-blur-sm group-hover:shadow-md group-hover:border-gray-300"
-                      rows={4}
-                      placeholder="Or type your answer here if you prefer..."
-                      disabled={isSubmittingAnswer || isRecording}
-                    />
-                    <div className="absolute bottom-3 right-3 text-xs text-gray-400 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md border border-gray-100">
-                      {currentAnswer.length} characters
-                    </div>
-                  </div>
-                </div>
-
-                {/* Enhanced Submit Button - Hide during feedback and after submission */}
-                {!isGivingFeedback && !hasSubmittedAnswer && (
-                  <div className="mt-6">
-                    <button
-                      onClick={handleAnswerSubmit}
-                      disabled={!currentAnswer.trim() || isSubmittingAnswer}
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3 relative overflow-hidden group"
-                    >
-                      {isSubmittingAnswer ? (
-                        <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          <span>Evaluating Your Answer...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-5 h-5" />
-                          <span>Submit Answer</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Enhanced Feedback Status - Show during feedback */}
-                {isGivingFeedback && (
-                  <div className="mt-6 text-center">
-                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg flex items-center justify-center gap-3 shadow-lg">
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>AI is providing feedback...</span>
-                    </div>
-                  </div>
+                ) : (
+                  <button
+                    onClick={stopRecording}
+                    className="w-full bg-gradient-to-r from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700 transition-all duration-300 font-semibold rounded-xl px-6 py-4 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                  >
+                    <Square className="w-5 h-5" />
+                    Stop Recording
+                  </button>
                 )}
               </div>
             </div>
-          )}
 
-          {/* Next Question Button - Show after feedback is spoken */}
-          {showNextQuestionButton && (
-            <div className="text-center mt-8">
-              <button
-                onClick={handleNextQuestion}
-                disabled={isGivingFeedback}
-                className="bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-300 hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3 mx-auto"
-              >
-                <ArrowRight className="w-5 h-5" />
-                <span>Next Question</span>
-              </button>
+            {/* Answer Input Below */}
+            <div className="w-full max-w-2xl flex flex-col items-center mb-6">
+              <div className="w-full bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-white/20">
+                <textarea
+                  value={currentAnswer}
+                  onChange={(e) => setCurrentAnswer(e.target.value)}
+                  className="w-full px-6 py-4 border-2 border-gray-200/50 rounded-xl focus:ring-4 focus:ring-blue-100/50 focus:border-blue-500 transition-all duration-300 text-base resize-none shadow-inner bg-white/50 backdrop-blur-sm"
+                  rows={4}
+                  placeholder="Or type your answer here if you prefer..."
+                  disabled={isSubmittingAnswer || isRecording}
+                />
+                <div className="mt-3 text-right text-sm text-gray-500 bg-gray-50/50 px-3 py-1 rounded-lg">
+                  {currentAnswer.length} characters
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Submit Button (gradient, full width) */}
+            <div className="w-full max-w-2xl flex flex-col items-center">
+              {!isGivingFeedback && !hasSubmittedAnswer && (
+                <button
+                  onClick={handleAnswerSubmit}
+                  disabled={!currentAnswer.trim() || isSubmittingAnswer}
+                  className="w-full py-5 rounded-2xl font-bold text-lg text-white flex items-center justify-center gap-3 transition-all duration-300 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500 shadow-2xl hover:shadow-3xl hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-1 relative overflow-hidden group"
+                >
+                  {/* Button glow effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-400 via-blue-400 to-purple-400 blur-lg opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
+                  <Send className="w-6 h-6 relative z-10 group-hover:animate-bounce" />
+                  <span className="relative z-10">Submit Answer</span>
+                </button>
+              )}
+              {/* Feedback Status */}
+              {isGivingFeedback && (
+                <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white py-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-4 shadow-2xl w-full relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-500 blur-lg opacity-50"></div>
+                  <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin relative z-10"></div>
+                  <span className="relative z-10">
+                    AI is providing feedback...
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Next Question Button */}
+            {showNextQuestionButton && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={handleNextQuestion}
+                  disabled={isGivingFeedback}
+                  className="bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-600 text-white px-10 py-5 rounded-2xl font-bold text-lg transition-all duration-300 hover:shadow-2xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3 mx-auto relative overflow-hidden group"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-500 blur-lg opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
+                  <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1 transition-transform duration-300" />
+                  <span className="relative z-10">Next Question</span>
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     );
   }
+  // ------------------- END INTERVIEW LAYOUT CHANGE ------------------------------------------
 
   if (currentStep === "report") {
     return (
