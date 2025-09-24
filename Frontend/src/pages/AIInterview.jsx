@@ -18,12 +18,16 @@ import {
   MicOff,
   Square,
 } from "lucide-react";
+import InterviewTabs from "../components/InterviewTabs";
+import SkillInterview from "./SkillInterview";
 
 const AIInterview = () => {
+  const [activeTab, setActiveTab] = useState("job");
   const [formData, setFormData] = useState({
     role: "",
     experience: "",
   });
+  const [isSkillInterview, setIsSkillInterview] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState("form"); // "form", "interview", "report"
   const [sessionData, setSessionData] = useState(null);
@@ -47,14 +51,55 @@ const AIInterview = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
+  // Check for skill interview data on component mount
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const interviewType = urlParams.get("type");
+
+    if (interviewType === "skill") {
+      const skillSessionData = localStorage.getItem("skillSessionData");
+      const selectedSkills = localStorage.getItem("selectedSkills");
+      const experienceLevel = localStorage.getItem("experienceLevel");
+
+      if (skillSessionData && selectedSkills && experienceLevel) {
+        try {
+          const sessionData = JSON.parse(skillSessionData);
+          const skills = JSON.parse(selectedSkills);
+
+          setSessionData(sessionData);
+          setIsSkillInterview(true);
+          setActiveTab("skill");
+          setCurrentStep("interview");
+          setCurrentQuestionIndex(0);
+          setIsUserReady(false);
+
+          // Clear localStorage
+          localStorage.removeItem("skillSessionData");
+          localStorage.removeItem("selectedSkills");
+          localStorage.removeItem("experienceLevel");
+
+          // Welcome message with TTS
+          const welcomeMessage = `Welcome to your skill-based interview session. I'll be asking you 5 questions focused on your selected skills: ${skills.join(
+            ", "
+          )}. Please click the "I'm Ready" button when you're prepared to begin.`;
+          speakText(welcomeMessage);
+        } catch (error) {
+          console.error("Error parsing skill session data:", error);
+        }
+      }
+    }
+  }, []);
+
   const fetchFinalReport = React.useCallback(async () => {
     if (!sessionData?.session_id) return;
 
     setIsLoadingReport(true);
     try {
-      const response = await fetch(
-        `http://localhost:3000/sessions/${sessionData.session_id}/report`
-      );
+      const endpoint = isSkillInterview
+        ? `http://localhost:3000/skill-sessions/${sessionData.session_id}/report`
+        : `http://localhost:3000/sessions/${sessionData.session_id}/report`;
+
+      const response = await fetch(endpoint);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -67,7 +112,7 @@ const AIInterview = () => {
     } finally {
       setIsLoadingReport(false);
     }
-  }, [sessionData?.session_id]);
+  }, [sessionData?.session_id, isSkillInterview]);
 
   // TTS function to convert text to speech
   const speakText = React.useCallback(
@@ -310,18 +355,19 @@ const AIInterview = () => {
     setIsSubmittingAnswer(true);
 
     try {
-      const response = await fetch(
-        `http://localhost:3000/sessions/${sessionData.session_id}/answers`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            answer: currentAnswer,
-          }),
-        }
-      );
+      const endpoint = isSkillInterview
+        ? `http://localhost:3000/skill-sessions/${sessionData.session_id}/answers`
+        : `http://localhost:3000/sessions/${sessionData.session_id}/answers`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          answer: currentAnswer,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -660,10 +706,14 @@ const AIInterview = () => {
                     </div>
                     <div className="text-center">
                       <div className="text-3xl font-bold text-purple-600">
-                        {finalReport.job_role}
+                        {isSkillInterview
+                          ? "Skills Assessed"
+                          : finalReport.job_role}
                       </div>
                       <div className="text-sm text-gray-600">
-                        Position Applied
+                        {isSkillInterview
+                          ? "Technical Skills"
+                          : "Position Applied"}
                       </div>
                     </div>
                   </div>
@@ -758,6 +808,8 @@ const AIInterview = () => {
                 setIsPlayingAudio(false);
                 setIsAudioEnabled(true);
                 setIsUserReady(false);
+                setIsSkillInterview(false);
+                setActiveTab("job");
                 if (audioRef.current) {
                   audioRef.current.pause();
                   audioRef.current.src = "";
@@ -773,12 +825,17 @@ const AIInterview = () => {
     );
   }
 
+  // Render skill interview if skill tab is selected
+  if (activeTab === "skill") {
+    return <SkillInterview />;
+  }
+
   // Default form step
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 py-12 sm:py-16 lg:py-20">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 py-8 sm:py-12 lg:py-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <div className="relative inline-block mb-8">
             <div className="absolute -inset-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full blur-2xl opacity-20"></div>
             <div className="relative bg-white rounded-2xl p-6 shadow-xl border border-gray-100">
@@ -801,6 +858,9 @@ const AIInterview = () => {
             adapt to your career level
           </p>
         </div>
+
+        {/* Interview Tabs - Positioned above the form */}
+        <InterviewTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
@@ -885,94 +945,139 @@ const AIInterview = () => {
 
           {/* Main Form */}
           <div className="lg:col-span-3">
-            <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                  Let's Start Your Journey
-                </h2>
-                <p className="text-gray-600">
-                  Tell us about your background to personalize your experience
-                </p>
-              </div>
+            <div className="relative bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-white/20 overflow-hidden">
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/30 via-purple-50/20 to-indigo-50/30 rounded-3xl"></div>
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-blue-200/10 to-purple-200/10 rounded-full blur-2xl"></div>
+              <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-br from-indigo-200/10 to-pink-200/10 rounded-full blur-2xl"></div>
 
-              <form onSubmit={handleSubmit} className="space-y-8">
-                {/* Role Input */}
-                <div className="space-y-3">
-                  <label
-                    htmlFor="role"
-                    className="block text-sm font-semibold text-gray-700"
-                  >
-                    <Briefcase className="w-4 h-4 inline mr-2" />
-                    Target Position
-                  </label>
-                  <input
-                    type="text"
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleInputChange}
-                    className="w-full px-6 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-lg"
-                    placeholder="e.g., Senior Software Engineer, Product Manager, UX Designer"
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
-
-                {/* Experience Level */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-semibold text-gray-700">
-                    <Clock className="w-4 h-4 inline mr-2" />
-                    Experience Level
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {experienceOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            experience: option.value,
-                          }))
-                        }
-                        className={`p-4 rounded-xl border-2 transition-all duration-200 text-center ${
-                          formData.experience === option.value
-                            ? "border-blue-500 bg-blue-50 text-blue-700 shadow-lg"
-                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                        }`}
-                        disabled={isLoading}
-                      >
-                        <div
-                          className={`w-3 h-3 rounded-full bg-gradient-to-r ${option.color} mx-auto mb-2`}
-                        ></div>
-                        <div className="text-sm font-medium">
-                          {option.label}
-                        </div>
-                      </button>
-                    ))}
+              <div className="relative z-10">
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-100 to-purple-100 px-4 py-2 rounded-full mb-4">
+                    <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse"></div>
+                    <span className="text-sm font-semibold text-gray-700">
+                      {activeTab === "job"
+                        ? "Job-Based Interview"
+                        : "Skill-Based Interview"}
+                    </span>
                   </div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-3">
+                    <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      Let's Start Your Journey
+                    </span>
+                  </h2>
+                  <p className="text-gray-600 text-lg">
+                    {activeTab === "job"
+                      ? "Tell us about your background to personalize your experience"
+                      : "Select your technical skills for targeted assessment"}
+                  </p>
                 </div>
 
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isLoading || !formData.role || !formData.experience}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-semibold text-lg transition-all duration-200 hover:shadow-xl transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3"
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Preparing Your Interview...
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="w-5 h-5" />
-                      Start AI Interview
-                      <ArrowRight className="w-5 h-5" />
-                    </>
-                  )}
-                </button>
-              </form>
+                <form onSubmit={handleSubmit} className="space-y-8">
+                  {/* Role Input */}
+                  <div className="space-y-4">
+                    <label
+                      htmlFor="role"
+                      className="flex items-center gap-2 text-sm font-bold text-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 px-4 py-2 rounded-lg border border-blue-100"
+                    >
+                      <Briefcase className="w-4 h-4 text-blue-600" />
+                      Target Position
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="role"
+                        name="role"
+                        value={formData.role}
+                        onChange={handleInputChange}
+                        className="w-full px-6 py-4 bg-white/80 backdrop-blur-sm border-2 border-gray-200/50 rounded-xl focus:ring-4 focus:ring-blue-100/50 focus:border-blue-500 transition-all duration-300 text-lg shadow-inner placeholder-gray-400"
+                        placeholder="e.g., Senior Software Engineer, Product Manager, UX Designer"
+                        required
+                        disabled={isLoading}
+                      />
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-purple-500/5 pointer-events-none"></div>
+                    </div>
+                  </div>
+
+                  {/* Experience Level */}
+                  <div className="space-y-4">
+                    <label className="flex items-center gap-2 text-sm font-bold text-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 px-4 py-2 rounded-lg border border-blue-100">
+                      <Clock className="w-4 h-4 text-blue-600" />
+                      Experience Level
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {experienceOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              experience: option.value,
+                            }))
+                          }
+                          className={`relative p-4 rounded-xl border-2 transition-all duration-300 text-center group ${
+                            formData.experience === option.value
+                              ? "border-blue-500 bg-gradient-to-br from-blue-50 to-purple-50 text-blue-700 shadow-xl transform scale-105"
+                              : "border-gray-200/50 hover:border-blue-300 hover:bg-gradient-to-br hover:from-gray-50 hover:to-blue-50 hover:shadow-lg hover:scale-105"
+                          }`}
+                          disabled={isLoading}
+                        >
+                          {/* Background gradient overlay */}
+                          <div
+                            className={`absolute inset-0 rounded-xl bg-gradient-to-r ${option.color} opacity-10 group-hover:opacity-20 transition-opacity duration-300`}
+                          ></div>
+
+                          <div className="relative z-10">
+                            <div
+                              className={`w-4 h-4 rounded-full bg-gradient-to-r ${option.color} mx-auto mb-3 shadow-lg`}
+                            ></div>
+                            <div className="text-sm font-semibold">
+                              {option.label}
+                            </div>
+                          </div>
+
+                          {/* Selection indicator */}
+                          {formData.experience === option.value && (
+                            <div className="absolute top-2 right-2 w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse"></div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-4">
+                    <button
+                      type="submit"
+                      disabled={
+                        isLoading || !formData.role || !formData.experience
+                      }
+                      className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white py-5 rounded-2xl font-bold text-lg transition-all duration-300 hover:shadow-2xl transform hover:-translate-y-2 hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-4 relative overflow-hidden group"
+                    >
+                      {/* Button glow effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-400 blur-lg opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
+
+                      {isLoading ? (
+                        <>
+                          <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin relative z-10"></div>
+                          <span className="relative z-10">
+                            Preparing Your Interview...
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Brain className="w-6 h-6 relative z-10 group-hover:animate-bounce" />
+                          <span className="relative z-10">
+                            Start AI Interview
+                          </span>
+                          <ArrowRight className="w-6 h-6 relative z-10 group-hover:translate-x-1 transition-transform duration-300" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         </div>
