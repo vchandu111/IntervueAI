@@ -4,6 +4,9 @@ import Navigation from "./components/Navigation";
 import Home from "./pages/Home";
 import Pricing from "./pages/Pricing";
 import AIInterview from "./pages/AIInterview";
+import JobSelection from "./pages/JobSelection";
+import SkillSelection from "./pages/SkillSelection";
+import Interview from "./pages/Interview";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 
@@ -16,6 +19,9 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/interview" element={<AIInterview />} />
+          <Route path="/job-selection" element={<JobSelection />} />
+          <Route path="/skill-selection" element={<SkillSelection />} />
+          <Route path="/interview-session" element={<Interview />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
         </Routes>
